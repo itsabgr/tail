@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var flagAddr = flag.String("addr", "", "service address")
+var flagAddr = flag.String("addr", ":8080", "service address")
 var flagDir = flag.String("dir", "", "service directory")
 var flagCleanPeriod = flag.Duration("clean", time.Hour*24*90, "clean records inserted before this period")
 
@@ -26,7 +26,7 @@ func init() {
 var ctx, cancel = context.WithCancel(context.Background())
 
 func init() {
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Kill, os.Interrupt)
 	go func() {
 		log.Println("FATAL", "signal", <-c)
@@ -61,10 +61,10 @@ func main() {
 	}
 	service := tail.NewServer(ctx, core)
 	defer service.Close()
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", freeport.GetPort()))
+	addr, err := net.ResolveUDPAddr("udp", *flagAddr)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	log.Println("INFO", "address", *flagAddr)
+	log.Println("INFO", "address", addr.String())
 	service.Listen(addr.String())
 }

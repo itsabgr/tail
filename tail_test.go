@@ -16,6 +16,7 @@ func TestCore(t *testing.T) {
 	defer storage.Close()
 	core := NewCore(storage)
 	now := time.Now()
+	<-time.NewTimer(1 * time.Second).C
 	for n := range make([]struct{}, 100) {
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, uint64(n))
@@ -33,9 +34,13 @@ func TestCore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	err = core.Clean(now)
+	n, err := core.Clean(now)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if n != 60 {
+		println(n)
+		t.FailNow()
 	}
 	var last []byte
 	for n := range make([]struct{}, 100) {
