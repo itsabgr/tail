@@ -1,8 +1,9 @@
 package tail
 
 import (
+	"bytes"
 	"context"
-	"io"
+	"github.com/valyala/fasthttp"
 	"net"
 	"time"
 )
@@ -16,7 +17,6 @@ type Server struct {
 func NewServer(ctx context.Context, core *Core) *Server {
 	context, cancel := context.WithCancel(ctx)
 	server := &Server{ctx: context, cancel: cancel, core: core}
-
 	return server
 }
 func (server *Server) Close() error {
@@ -38,38 +38,38 @@ func (server *Server) handleUDP(packetConn net.PacketConn) error {
 	}
 }
 
-func (server *Server) handleTCPConn(conn net.Conn) error {
-	defer conn.Close()
-	err := conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	if err != nil {
-		return err
-	}
-	
-	b, err := io.ReadAll(io.LimitReader(conn, 2048))
-	if err != nil {
-		return err
-	}
-	err = server.core.Put(b, time.Now())
-	err2 := conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-	if err2 != nil {
-		return err
-	}
-	if err != nil {
-		_, _ = io.WriteString(conn, err.Error())
-		return err
-	}
-	_, err = io.WriteString(conn, "OK")
-	return err
-
-}
 func (server *Server) serveTCP(conn net.Listener) error {
-	for {
-		conn, err := conn.Accept()
-		if err != nil {
-			return err
+	http := fasthttp.Server{}
+	http.ReadTimeout = 2 * time.Second
+	http.WriteTimeout = 2 * time.Second
+	http.ReadTimeout = 2 * time.Second
+	http.IdleTimeout = 2 * time.Second
+	http.MaxRequestBodySize = 2048
+	http.DisableHeaderNamesNormalizing = true
+	http.NoDefaultDate = true
+	http.NoDefaultServerHeader = true
+	http.NoDefaultContentType = true
+	http.TCPKeepalivePeriod = 2 * time.Second
+	http.Handler = func(ctx *fasthttp.RequestCtx) {
+		var err error
+		var b []byte
+		if bytes.Equal(ctx.Method(), []byte(fasthttp.MethodPut)) {
+			err = server.core.Put(ctx.PostBody(), time.Now())
+		} else {
+			b, err = server.core.Get(ctx.PostBody())
+			ctx.SetBody(b)
 		}
-		_ = server.handleTCPConn(conn)
+		if err != nil {
+			http.ErrorHandler(ctx, err)
+			return
+		}
+		ctx.SetStatusCode(fasthttp.StatusNoContent)
 	}
+	http.ErrorHandler = func(ctx *fasthttp.RequestCtx, err error) {
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		ctx.SetBodyString(err.Error())
+	}
+	return http.Serve(conn)
 }
 func (server *Server) Listen(addr string) error {
 	packetConn, err := net.ListenPacket("udp", addr)

@@ -3,6 +3,7 @@ package tail
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"time"
 )
 
@@ -14,6 +15,7 @@ func NewCore(storage *Storage) *Core {
 	return &Core{storage: storage}
 }
 func (core *Core) Put(b []byte, time time.Time) error {
+	fmt.Println(b)
 	v := make([]byte, 8)
 	binary.BigEndian.PutUint64(v, uint64(time.Unix()))
 	return core.storage.Put(b, v)
@@ -28,22 +30,23 @@ func (core *Core) Get(last []byte) ([]byte, error) {
 }
 func (core *Core) Clean(before time.Time) (int, error) {
 	a := make([]byte, 8)
-	var n int
 	binary.BigEndian.PutUint64(a, uint64(before.Unix()))
+	var n int
 	var last []byte
-	for {
+	err := core.storage.Fold(nil, nil, func(key, val []byte) error {
 		key, b, err := core.storage.Get(last)
 		if err != nil {
-			if err == ErrNotFound {
-				break
-			}
-			return n, err
+			return err
 		}
 		if bytes.Compare(a, b) != -1 {
 			n++
-			core.storage.Purge(key)
+			_ = core.storage.Purge(key)
 		}
 		last = key
+		return nil
+	})
+	if err == ErrNotFound {
+		err = nil
 	}
-	return n, nil
+	return n, err
 }
