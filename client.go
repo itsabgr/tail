@@ -3,9 +3,9 @@ package tail
 import (
 	"bytes"
 	"github.com/syndtr/goleveldb/leveldb/errors"
-	"io"
 	"net"
-	"time"
+	"net/http"
+	"strconv"
 )
 
 type Poller struct {
@@ -37,28 +37,12 @@ func (poller *Poller) Poll(last []byte, addr net.Addr) ([]byte, error) {
 	return b[:n], nil
 }
 func Push(addr string, b []byte) error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	resp, err := http.DefaultClient.Post(addr, "text/plain", bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	if err != nil {
-		return err
-	}
-	_ = conn.SetNoDelay(true)
-	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, err = conn.Write(b)
-	if err != nil {
-		return err
-	}
-	_ = conn.CloseWrite()
-	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-	b, err = io.ReadAll(conn)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(b, []byte("OK")) {
-		return errors.New(string(b))
+	if resp.StatusCode != http.StatusNoContent {
+		return errors.New(strconv.FormatInt(int64(resp.StatusCode), 10))
 	}
 	return nil
 }

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var flagAddr = flag.String("addr", "", "service address")
+var flagAddr = flag.String("addr", ":8080", "service address")
 var flagDir = flag.String("dir", "", "service directory")
 var flagCleanPeriod = flag.Duration("clean", time.Hour*24*90, "clean records inserted before this period")
 

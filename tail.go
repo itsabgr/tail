@@ -3,7 +3,6 @@ package tail
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"time"
 )
 
@@ -15,7 +14,6 @@ func NewCore(storage *Storage) *Core {
 	return &Core{storage: storage}
 }
 func (core *Core) Put(b []byte, time time.Time) error {
-	fmt.Println(b)
 	v := make([]byte, 8)
 	binary.BigEndian.PutUint64(v, uint64(time.Unix()))
 	return core.storage.Put(b, v)

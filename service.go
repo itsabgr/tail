@@ -1,7 +1,6 @@
 package tail
 
 import (
-	"bytes"
 	"context"
 	"github.com/valyala/fasthttp"
 	"net"
@@ -15,8 +14,8 @@ type Server struct {
 }
 
 func NewServer(ctx context.Context, core *Core) *Server {
-	context, cancel := context.WithCancel(ctx)
-	server := &Server{ctx: context, cancel: cancel, core: core}
+	ctx, cancel := context.WithCancel(ctx)
+	server := &Server{ctx: ctx, cancel: cancel, core: core}
 	return server
 }
 func (server *Server) Close() error {
@@ -37,7 +36,6 @@ func (server *Server) handleUDP(packetConn net.PacketConn) error {
 		_, _ = packetConn.WriteTo(v, from)
 	}
 }
-
 func (server *Server) serveTCP(conn net.Listener) error {
 	http := fasthttp.Server{}
 	http.ReadTimeout = 2 * time.Second
@@ -51,19 +49,24 @@ func (server *Server) serveTCP(conn net.Listener) error {
 	http.NoDefaultContentType = true
 	http.TCPKeepalivePeriod = 2 * time.Second
 	http.Handler = func(ctx *fasthttp.RequestCtx) {
-		var err error
-		var b []byte
-		if bytes.Equal(ctx.Method(), []byte(fasthttp.MethodPut)) {
-			err = server.core.Put(ctx.PostBody(), time.Now())
+		if string(ctx.Method()) == fasthttp.MethodPost {
+			err := server.core.Put(ctx.Request.Body(), time.Now())
+			if err != nil {
+				http.ErrorHandler(ctx, err)
+				return
+			}
+			ctx.SetStatusCode(fasthttp.StatusNoContent)
 		} else {
-			b, err = server.core.Get(ctx.PostBody())
+			b, err := server.core.Get(ctx.Request.Body())
+			if err != nil {
+				http.ErrorHandler(ctx, err)
+				return
+			}
+			if len(b) == 0 {
+				ctx.SetStatusCode(fasthttp.StatusNoContent)
+			}
 			ctx.SetBody(b)
 		}
-		if err != nil {
-			http.ErrorHandler(ctx, err)
-			return
-		}
-		ctx.SetStatusCode(fasthttp.StatusNoContent)
 	}
 	http.ErrorHandler = func(ctx *fasthttp.RequestCtx, err error) {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)

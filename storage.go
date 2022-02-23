@@ -32,7 +32,7 @@ func (storage *Storage) Put(key []byte, val []byte) error {
 }
 
 func (storage *Storage) Get(start []byte) (key, val []byte, err error) {
-	iter := storage.db.NewIterator(&util.Range{Start: nil, Limit: nil}, &opt.ReadOptions{})
+	iter := storage.db.NewIterator(&util.Range{Start: start, Limit: nil}, &opt.ReadOptions{})
 	defer iter.Release()
 	if false == iter.Next() {
 		return nil, nil, leveldb.ErrNotFound
